@@ -3,7 +3,7 @@ from bs4 import BeautifulSoup
 import datetime
 import os
 
-WEBHOOK = os.getenv("WEBHOOK_NEWCOINS")  # 企业微信机器人地址
+WEBHOOK = os.getenv("WEBHOOK_NEWCOINS")  # https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=ec4b5f2c-caf5-4c68-ab3c-1c5d2d76b2ed
 
 def fetch_pump_tokens():
     try:

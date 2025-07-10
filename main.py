@@ -1,121 +1,93 @@
 import requests
-import os
 from datetime import datetime, timedelta
-from bs4 import BeautifulSoup
 
-WEBHOOK = os.getenv("WEBHOOK_NEWCOINS")
-HEADERS = {"User-Agent": "Mozilla/5.0"}
-NEW_COIN_HOURS = 24
+WEBHOOK = "你的企业微信 webhook（填环境变量）"
 
-def get_alva_description(symbol):
+import os
+WEBHOOK = os.environ.get("WEBHOOK_NEWCOINS")
+
+def send_to_wechat(content: str):
+    if not WEBHOOK:
+        print("未设置 WEBHOOK_NEWCOINS")
+        return
+    payload = {
+        "msgtype": "text",
+        "text": {"content": content}
+    }
     try:
-        url = f"https://alva.xyz/zh-CN/search?q={symbol}"
-        r = requests.get(url, headers=HEADERS, timeout=10)
-        soup = BeautifulSoup(r.text, "html.parser")
-        desc_tag = soup.find("p", class_="text-muted")
-        return desc_tag.text.strip() if desc_tag else "暂无简介"
+        res = requests.post(WEBHOOK, json=payload)
+        print("推送状态码:", res.status_code)
+        print("推送返回内容:", res.text)
     except Exception as e:
-        print(f"Alva简介获取异常: {e}")
-        return "简介获取失败"
+        print("推送失败:", e)
 
-def get_pump_coins():
-    url = "https://pump.fun/api/coins/recent"
+def fetch_pump_tokens():
+    url = "https://pump.fun/api/trending"
     try:
-        r = requests.get(url, headers=HEADERS, timeout=10)
-        data = r.json()
-        now = datetime.utcnow()
-        coins = []
-        for c in data:
-            mc = c.get("marketCapUsd", 0)
-            launch_ts = c.get("launchTime")
-            if launch_ts:
-                launch_time = datetime.utcfromtimestamp(launch_ts)
-                if now - launch_time > timedelta(hours=NEW_COIN_HOURS):
-                    continue
-            if mc and mc >= 1_000_000:
-                coins.append({
-                    "platform": "pump.fun",
-                    "name": c.get("name"),
-                    "symbol": c.get("symbol"),
-                    "market_cap": mc,
-                    "volume": c.get("volume", 0),
-                    "ca": c.get("address")
+        res = requests.get(url, timeout=10)
+        data = res.json()
+        tokens = []
+        for token in data:
+            market_cap = token.get("marketCap", 0)
+            if market_cap >= 1_000_000:
+                tokens.append({
+                    "name": token.get("name"),
+                    "symbol": token.get("symbol"),
+                    "market_cap": market_cap,
+                    "volume": token.get("volume", 0),
+                    "address": token.get("tokenAddress"),
+                    "url": f"https://pump.fun/{token.get('tokenAddress')}"
                 })
-        return coins
+        return tokens
     except Exception as e:
-        print(f"获取 pump.fun 异常: {e}")
+        print("获取 pump 数据失败:", e)
         return []
 
-def get_dexscreener_coins():
-    url = "https://api.dexscreener.com/latest/dex/pairs"
+def fetch_dex_tokens():
+    url = "https://api.dexscreener.com/latest/dex/pairs/solana"
     try:
-        r = requests.get(url, headers=HEADERS, timeout=10)
-        pairs = r.json().get("pairs", [])
-        dex_symbols = set()
-        dex_contracts = set()
-        for p in pairs:
-            symbol = p.get("baseToken", {}).get("symbol")
-            ca = p.get("pairAddress")
-            if symbol:
-                dex_symbols.add(symbol)
-            if ca:
-                dex_contracts.add(ca.lower())
-        return dex_symbols, dex_contracts
+        res = requests.get(url, timeout=10)
+        pairs = res.json().get("pairs", [])
+        now = datetime.utcnow()
+        threshold_time = now - timedelta(hours=24)
+        tokens = []
+        for pair in pairs:
+            if not pair.get("pairCreatedAt"): continue
+            try:
+                created = datetime.fromisoformat(pair["pairCreatedAt"].replace("Z", "+00:00"))
+            except: continue
+            if created < threshold_time: continue
+            mcap = float(pair.get("fdv", 0) or 0)
+            if mcap >= 1_000_000:
+                tokens.append({
+                    "name": pair.get("baseToken", {}).get("name"),
+                    "symbol": pair.get("baseToken", {}).get("symbol"),
+                    "market_cap": mcap,
+                    "volume": pair.get("volume", {}).get("h24", 0),
+                    "address": pair.get("pairAddress"),
+                    "url": pair.get("url")
+                })
+        return tokens
     except Exception as e:
-        print(f"获取 dexscreener 异常: {e}")
-        return set(), set()
+        print("获取 dex 数据失败:", e)
+        return []
 
-def format_coin(c):
-    desc = get_alva_description(c["symbol"])
-    return (
-        f"平台: {c['platform']}\n"
-        f"名称: {c['name']} ({c['symbol']})\n"
-        f"市值: ${c['market_cap']:,}\n"
-        f"交易量: ${c['volume']:,}\n"
-        f"合约地址: {c['ca']}\n"
-        f"简介: {desc}\n"
-        "-------------------------"
-    )
-
-def send_wechat(text):
-    if not WEBHOOK:
-        print("❌ 未设置 WEBHOOK_NEWCOINS 环境变量")
-        return False
-    payload = {"msgtype": "text", "text": {"content": text}}
-    try:
-        resp = requests.post(WEBHOOK, json=payload, timeout=10)
-        print(f"推送状态码: {resp.status_code}")
-        print(f"推送返回内容: {resp.text}")
-        return resp.status_code == 200
-    except Exception as e:
-        print(f"推送异常: {e}")
-        return False
+def format_tokens(title, tokens):
+    if not tokens:
+        return f"🔹【{title}】\n暂无符合条件的新币\n"
+    msg = f"🔹【{title}】\n"
+    for token in tokens[:5]:
+        msg += f"🚀 {token['symbol']} | 💰市值: {int(token['market_cap']/1e6)}M | 📈交易量: {int(token['volume'])}\n"
+        msg += f"🔗链接: {token['url']}\n\n"
+    return msg
 
 def main():
-    print("开始抓取pump.fun数据...")
-    pump_coins = get_pump_coins()
-    print(f"抓取到pump.fun币数: {len(pump_coins)}")
-
-    print("开始抓取DexScreener数据...")
-    dex_symbols, dex_contracts = get_dexscreener_coins()
-    print(f"DexScreener币种数量: {len(dex_symbols)}")
-
-    filtered_coins = []
-    for c in pump_coins:
-        ca = c.get("ca", "").lower()
-        sym = c.get("symbol")
-        if ca in dex_contracts or sym in dex_symbols:
-            filtered_coins.append(c)
-    print(f"筛选后符合条件币数: {len(filtered_coins)}")
-
-    if not filtered_coins:
-        send_wechat("今日无符合pump发射且已上DexScreener的新币，市值≥1M。")
-        return
-
-    content = "📢【今日pump发射且上DexScreener新币播报】\n\n" + "\n\n".join(format_coin(c) for c in filtered_coins)
-    success = send_wechat(content)
-    if not success:
-        print("推送微信失败，请检查Webhook和网络")
+    pump_tokens = fetch_pump_tokens()
+    dex_tokens = fetch_dex_tokens()
+    msg = "📊【新币推送】过去24h市值突破1M USDT\n\n"
+    msg += format_tokens("Pump 平台", pump_tokens)
+    msg += format_tokens("DexScreener 平台", dex_tokens)
+    send_to_wechat(msg)
 
 if __name__ == "__main__":
     main()

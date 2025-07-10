@@ -1,9 +1,9 @@
-name: Daily Crypto Notify
+name: DexScreener Volume Spike Monitor
 
 on:
-  workflow_dispatch:     # 允许手动运行
   schedule:
-    - cron: '0 23 * * *' # 每天 UTC 23 点运行（北京时间 7 点）
+    - cron: '*/15 * * * *'   # 每15分钟执行一次，实时监控
+  workflow_dispatch:         # 允许手动触发
 
 jobs:
   notify:
@@ -13,15 +13,29 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
+      - name: Cache last volumes
+        uses: actions/cache@v3
+        with:
+          path: last_volumes.json
+          key: ${{ runner.os }}-last_volumes
+          restore-keys: |
+            ${{ runner.os }}-last_volumes
+
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
       - name: Install dependencies
-        run: pip install requests beautifulsoup4
+        run: pip install requests
 
       - name: Run notification script
         env:
           WEBHOOK_NEWCOINS: ${{ secrets.WEBHOOK_NEWCOINS }}
         run: python main.py
+
+      - name: Save cache
+        uses: actions/cache@v3
+        with:
+          path: last_volumes.json
+          key: ${{ runner.os }}-last_volumes

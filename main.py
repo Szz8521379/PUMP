@@ -2,99 +2,85 @@ import os
 import requests
 from datetime import datetime, timedelta
 
-# 从环境变量读取企业微信机器人Webhook地址
+# 从环境变量读取 Webhook
 WEBHOOK = os.environ.get("WEBHOOK_NEWCOINS")
 
-if not WEBHOOK:
-    print("❗️ 请先在 GitHub Secrets 添加名为 WEBHOOK_NEWCOINS 的变量，值为你的企业微信Webhook地址")
-    exit(1)
-
 def send_to_wechat(content: str):
-    """推送消息到企业微信"""
+    if not WEBHOOK:
+        print("❌ Webhook 地址未设置")
+        return
     payload = {
         "msgtype": "text",
         "text": {"content": content}
     }
     try:
         res = requests.post(WEBHOOK, json=payload)
-        print("推送状态码:", res.status_code)
-        print("推送返回内容:", res.text)
+        print("✅ 推送状态码:", res.status_code)
+        print("📨 返回:", res.text)
     except Exception as e:
         print("推送失败:", e)
 
 def fetch_pump_tokens():
-    """示例：从 pump.fun 获取市值≥1M的新币"""
-    url = "https://pump.fun/api/trending"
+    url = "https://pump.fun/board"
     try:
         res = requests.get(url, timeout=10)
-        data = res.json()
-        tokens = []
+        data = res.json().get("tokens", [])
+        result = []
         for token in data:
             market_cap = token.get("marketCap", 0)
             if market_cap >= 1_000_000:
-                tokens.append({
-                    "name": token.get("name"),
+                result.append({
                     "symbol": token.get("symbol"),
+                    "name": token.get("name"),
                     "market_cap": market_cap,
-                    "volume": token.get("volume", 0),
-                    "address": token.get("tokenAddress"),
-                    "url": f"https://pump.fun/{token.get('tokenAddress')}"
+                    "url": f"https://pump.fun/{token.get('id')}"
                 })
-        return tokens
+        return result
     except Exception as e:
-        print("获取 pump 数据失败:", e)
+        print("❌ 获取 pump 数据失败:", e)
         return []
 
 def fetch_dex_tokens():
-    """示例：从 DexScreener 获取24小时内上线且市值≥1M的币"""
     url = "https://api.dexscreener.com/latest/dex/pairs/solana"
     try:
         res = requests.get(url, timeout=10)
         pairs = res.json().get("pairs", [])
         now = datetime.utcnow()
-        threshold_time = now - timedelta(hours=24)
-        tokens = []
+        threshold = now - timedelta(hours=24)
+        result = []
         for pair in pairs:
-            if not pair.get("pairCreatedAt"):
+            mcap = float(pair.get("fdv") or 0)
+            created = pair.get("pairCreatedAt")
+            if not created:
                 continue
             try:
-                created = datetime.fromisoformat(pair["pairCreatedAt"].replace("Z", "+00:00"))
+                created_dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
             except:
                 continue
-            if created < threshold_time:
-                continue
-            mcap = float(pair.get("fdv", 0) or 0)
-            if mcap >= 1_000_000:
-                tokens.append({
-                    "name": pair.get("baseToken", {}).get("name"),
-                    "symbol": pair.get("baseToken", {}).get("symbol"),
+            if mcap >= 1_000_000 and created_dt >= threshold:
+                result.append({
+                    "symbol": pair["baseToken"]["symbol"],
+                    "name": pair["baseToken"]["name"],
                     "market_cap": mcap,
-                    "volume": pair.get("volume", {}).get("h24", 0),
-                    "address": pair.get("pairAddress"),
-                    "url": pair.get("url")
+                    "url": pair["url"]
                 })
-        return tokens
+        return result
     except Exception as e:
-        print("获取 dex 数据失败:", e)
+        print("❌ 获取 dex 数据失败:", e)
         return []
 
 def format_tokens(title, tokens):
     if not tokens:
-        return f"🔹【{title}】\n暂无符合条件的新币\n\n"
+        return f"🔹【{title}】暂无新币符合条件\n"
     msg = f"🔹【{title}】\n"
     for token in tokens[:5]:
-        msg += f"🚀 {token['symbol']} | 💰市值: {int(token['market_cap']/1e6)}M | 📈交易量: {int(token['volume'])}\n"
-        msg += f"🔗链接: {token['url']}\n\n"
+        msg += f"🚀 {token['symbol']} | 💰市值: {int(token['market_cap']/1e6)}M\n🔗链接: {token['url']}\n\n"
     return msg
 
 def main():
-    pump_tokens = fetch_pump_tokens()
-    dex_tokens = fetch_dex_tokens()
-
-    msg = "📊【新币推送】过去24小时市值突破1M USDT\n\n"
-    msg += format_tokens("Pump 平台", pump_tokens)
-    msg += format_tokens("DexScreener 平台", dex_tokens)
-
+    msg = "📊【新币追踪】24小时市值突破 1M USDT 的代币\n\n"
+    msg += format_tokens("Pump 平台", fetch_pump_tokens())
+    msg += format_tokens("DexScreener", fetch_dex_tokens())
     send_to_wechat(msg)
 
 if __name__ == "__main__":

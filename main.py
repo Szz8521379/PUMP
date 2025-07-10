@@ -6,7 +6,9 @@ from datetime import datetime, timedelta
 WEBHOOK = os.environ.get("WEBHOOK_NEWCOINS")
 
 if not WEBHOOK:
-    print("curl "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=ec4b5f2c-caf5-4c68-ab3c-1c5d2d76b2ed" `
+    print("❗️ 请先在 GitHub Secrets 添加名为 WEBHOOK_NEWCOINS 的变量，值为你的企业微信Webhook地址")
+    exit(1)
+
   -H "Content-Type: application/json" `
   -Body '{"msgtype":"text","text":{"content":"🔔 测试推送成功！来自 curl"}}' `
   -Method POST

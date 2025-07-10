@@ -2,6 +2,7 @@ name: DEXScreener Push
 on:
   schedule:
     - cron: '*/15 * * * *'  # 每15分钟运行
+    workflow_dispatch:  # 手动触发
 jobs:
   push:
     runs-on: ubuntu-latest

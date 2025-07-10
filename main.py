@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 WEBHOOK = "你的企业微信 webhook（填环境变量）"
 
 import os
-WEBHOOK = os.environ.get("WEBHOOK_NEWCOINS")
+WEBHOOK = os.environ.get("https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=ec4b5f2c-caf5-4c68-ab3c-1c5d2d76b2ed")
 
 def send_to_wechat(content: str):
     if not WEBHOOK:

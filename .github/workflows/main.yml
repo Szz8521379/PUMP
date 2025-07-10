@@ -1,6 +1,7 @@
 name: Daily Crypto Notify
 
 on:
+  workflow_dispatch:    # 允许手动触发
   schedule:
     # 每天早上7点（北京时间）执行，UTC时间为前一天23点
     - cron: '0 23 * * *'

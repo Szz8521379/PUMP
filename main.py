@@ -1,7 +1,7 @@
 import os
 import json
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 
 WEBHOOK = os.environ.get("WEBHOOK_NEWCOINS")
 DATA_FILE = "last_volumes.json"
@@ -47,31 +47,43 @@ def fetch_dexscreener_data():
 def analyze_volume_spike(pairs, last_volumes):
     abnormal = []
     updated_volumes = {}
+    ten_days_ago = datetime.utcnow() - timedelta(days=10)
+
     for pair in pairs:
         pair_addr = pair.get("pairAddress")
-        vol_24h = pair.get("volume", {}).get("h24", 0)
-        if pair_addr is None or vol_24h is None:
+        vol_15min = pair.get("volume", {}).get("m15", 0)  # 15分钟交易量
+        price_change_15min = pair.get("priceChange", {}).get("m15", 0)  # 15分钟价格涨幅
+        pair_created_at = pair.get("pairCreatedAt")  # 交易对创建时间（毫秒）
+
+        if pair_addr is None or vol_15min is None or price_change_15min is None or pair_created_at is None:
             continue
+
+        # 转换为 datetime 检查年龄
+        pair_created_time = datetime.fromtimestamp(pair_created_at / 1000)
+        age_days = (datetime.utcnow() - pair_created_time).days
+
         last_vol = last_volumes.get(pair_addr, 0)
         # 首次没有数据直接保存，不报警
         if last_vol == 0:
-            updated_volumes[pair_addr] = vol_24h
+            updated_volumes[pair_addr] = vol_15min
             continue
-        ratio = vol_24h / last_vol if last_vol else 0
-        increase_pct = (vol_24h - last_vol) / last_vol if last_vol else 0
 
-        # 满足放大5倍且涨幅50%以上
-        if ratio >= 5 and increase_pct >= 0.5:
+        ratio = vol_15min / last_vol if last_vol else 0
+
+        # 筛选：年龄≥10天，交易量放大≥5倍，价格涨幅≥50%
+        if age_days >= 10 and ratio >= 5 and price_change_15min >= 50:
             abnormal.append({
                 "symbol": pair.get("baseToken", {}).get("symbol", "未知"),
                 "name": pair.get("baseToken", {}).get("name", "未知"),
                 "pairAddress": pair_addr,
                 "old_volume": last_vol,
-                "new_volume": vol_24h,
+                "new_volume": vol_15min,
+                "price_change": price_change_15min,
                 "ratio": ratio,
                 "url": pair.get("url", "")
             })
-        updated_volumes[pair_addr] = vol_24h
+        updated_volumes[pair_addr] = vol_15min
+
     return abnormal, updated_volumes
 
 def main():
@@ -84,11 +96,13 @@ def main():
         print(f"{datetime.utcnow()} - 无异常交易量放大")
         return
 
-    msg = "【DexScreener 老币交易量异常监控】发现以下币种交易量放大：\n\n"
+    msg = "【DexScreener 老币监控】发现以下币种异常：\n\n"
     for t in spikes:
         msg += (f"🚨 {t['symbol']} ({t['name']})\n"
-                f"交易量从 {int(t['old_volume'])} 增长到 {int(t['new_volume'])}，放大 {t['ratio']:.2f} 倍\n"
-                f"交易对链接: {t['url']}\n\n")
+                f"15分钟交易量从 ${int(t['old_volume'])} 增长到 ${int(t['new_volume'])}，放大 {t['ratio']:.2f} 倍\n"
+                f"15分钟价格涨幅: {t['price_change']:.2f}%\n"
+                f"交易对链接: {t['url']}\n"
+                f"请自行研究（DYOR）！\n\n")
     send_to_wechat(msg)
 
 if __name__ == "__main__":

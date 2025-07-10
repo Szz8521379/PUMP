@@ -4,7 +4,7 @@ import requests
 from datetime import datetime
 
 WEBHOOK = os.environ.get("WEBHOOK_NEWCOINS")
-DATA_FILE = "last_volumes.json"
+CACHE_FILE = "last_volumes.json"
 
 def send_to_wechat(content: str):
     if not WEBHOOK:
@@ -22,16 +22,16 @@ def send_to_wechat(content: str):
         print("推送失败:", e)
 
 def load_last_volumes():
-    if not os.path.exists(DATA_FILE):
+    if not os.path.exists(CACHE_FILE):
         return {}
-    with open(DATA_FILE, "r") as f:
+    with open(CACHE_FILE, "r") as f:
         try:
             return json.load(f)
         except:
             return {}
 
 def save_last_volumes(data):
-    with open(DATA_FILE, "w") as f:
+    with open(CACHE_FILE, "w") as f:
         json.dump(data, f)
 
 def fetch_dexscreener_data():

@@ -1,41 +1,21 @@
-name: DexScreener Volume Spike Monitor
-
+name: DEXScreener Push
 on:
   schedule:
-    - cron: '*/15 * * * *'   # 每15分钟执行一次，实时监控
-  workflow_dispatch:         # 允许手动触发
-
+    - cron: '*/15 * * * *'  # 每15分钟运行
 jobs:
-  notify:
+  push:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
-
-      - name: Cache last volumes
-        uses: actions/cache@v3
-        with:
-          path: last_volumes.json
-          key: ${{ runner.os }}-last_volumes
-          restore-keys: |
-            ${{ runner.os }}-last_volumes
-
-      - name: Setup Python
+      - uses: actions/checkout@v3
+      - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
-
+          python-version: '3.8'
       - name: Install dependencies
-        run: pip install requests
-
-      - name: Run notification script
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run script
         env:
           WEBHOOK_NEWCOINS: ${{ secrets.WEBHOOK_NEWCOINS }}
         run: python main.py
-
-      - name: Save cache
-        uses: actions/cache@v3
-        with:
-          path: last_volumes.json
-          key: ${{ runner.os }}-last_volumes

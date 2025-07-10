@@ -1,13 +1,14 @@
 name: Daily Crypto Notify
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:  # 手动触发
   schedule:
-    - cron: '0 23 * * *' # UTC 23点 = 北京时间早上7点
+    - cron: '0 23 * * *'  # UTC时间23点执行（北京时间早上7点）
 
 jobs:
   notify:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -20,5 +21,7 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
-      - name: Run script
+      - name: Run notification script
+        env:
+          WEBHOOK_NEWCOINS: ${{ secrets.WEBHOOK_NEWCOINS }}  # 传递Webhook给脚本
         run: python main.py

@@ -9,12 +9,6 @@ if not WEBHOOK:
     print("❗️ 请先在 GitHub Secrets 添加名为 WEBHOOK_NEWCOINS 的变量，值为你的企业微信Webhook地址")
     exit(1)
 
-  -H "Content-Type: application/json" `
-  -Body '{"msgtype":"text","text":{"content":"🔔 测试推送成功！来自 curl"}}' `
-  -Method POST
-")
-    exit(1)
-
 def send_to_wechat(content: str):
     """推送消息到企业微信"""
     payload = {
@@ -29,7 +23,7 @@ def send_to_wechat(content: str):
         print("推送失败:", e)
 
 def fetch_pump_tokens():
-    """示例：从pump.fun获取市值≥1M的新币"""
+    """示例：从 pump.fun 获取市值≥1M的新币"""
     url = "https://pump.fun/api/trending"
     try:
         res = requests.get(url, timeout=10)
@@ -61,13 +55,13 @@ def fetch_dex_tokens():
         threshold_time = now - timedelta(hours=24)
         tokens = []
         for pair in pairs:
-            if not pair.get("pairCreatedAt"): 
+            if not pair.get("pairCreatedAt"):
                 continue
             try:
                 created = datetime.fromisoformat(pair["pairCreatedAt"].replace("Z", "+00:00"))
-            except: 
+            except:
                 continue
-            if created < threshold_time: 
+            if created < threshold_time:
                 continue
             mcap = float(pair.get("fdv", 0) or 0)
             if mcap >= 1_000_000:

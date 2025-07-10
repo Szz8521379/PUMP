@@ -117,3 +117,35 @@ def main():
 
 if __name__ == "__main__":
     main()
+import os
+import requests
+import json
+
+# 从 GitHub Secrets 中读取 webhook 地址
+webhook = os.getenv("WEBHOOK_NEWCOINS")
+
+if not webhook:
+    print("❌ 未获取到 Webhook 地址，请在 GitHub Secrets 中设置 WEBHOOK_NEWCOINS")
+else:
+    message = {
+        "msgtype": "text",
+        "text": {
+            "content": "✅【测试消息】GitHub Actions 成功触发微信机器人推送！"
+        }
+    }
+
+    print("🔔 正在发送微信通知...")
+    try:
+        response = requests.post(
+            webhook,
+            headers={"Content-Type": "application/json"},
+            data=json.dumps(message)
+        )
+        print("✅ 推送响应状态码：", response.status_code)
+        print("✅ 推送响应内容：", response.text)
+        if response.status_code == 200:
+            print("🎉 消息推送成功，请查看微信群！")
+        else:
+            print("❌ 消息推送失败，请检查 webhook 地址或消息格式")
+    except Exception as e:
+        print("❌ 推送出错：", e)

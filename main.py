@@ -1,8 +1,9 @@
 import os
 import requests
 from datetime import datetime, timedelta
+from bs4 import BeautifulSoup
+import time
 
-# 从环境变量读取 Webhook
 WEBHOOK = os.environ.get("WEBHOOK_NEWCOINS")
 
 def send_to_wechat(content: str):
@@ -20,6 +21,22 @@ def send_to_wechat(content: str):
     except Exception as e:
         print("推送失败:", e)
 
+def fetch_alva_description(symbol_or_address):
+    """通过 Alva 搜索简介"""
+    url = f"https://alva.xyz/zh-CN/search?q={symbol_or_address}"
+    headers = {
+        "User-Agent": "Mozilla/5.0"
+    }
+    try:
+        res = requests.get(url, headers=headers, timeout=10)
+        soup = BeautifulSoup(res.text, "html.parser")
+        desc = soup.find("div", class_="text-sm text-muted")
+        if desc:
+            return desc.get_text().strip()
+    except Exception as e:
+        print(f"Alva 查询失败: {e}")
+    return "暂无简介"
+
 def fetch_pump_tokens():
     url = "https://pump.fun/board"
     try:
@@ -33,7 +50,8 @@ def fetch_pump_tokens():
                     "symbol": token.get("symbol"),
                     "name": token.get("name"),
                     "market_cap": market_cap,
-                    "url": f"https://pump.fun/{token.get('id')}"
+                    "url": f"https://pump.fun/{token.get('id')}",
+                    "alva_key": token.get("symbol")
                 })
         return result
     except Exception as e:
@@ -62,7 +80,8 @@ def fetch_dex_tokens():
                     "symbol": pair["baseToken"]["symbol"],
                     "name": pair["baseToken"]["name"],
                     "market_cap": mcap,
-                    "url": pair["url"]
+                    "url": pair["url"],
+                    "alva_key": pair["pairAddress"]
                 })
         return result
     except Exception as e:
@@ -74,7 +93,11 @@ def format_tokens(title, tokens):
         return f"🔹【{title}】暂无新币符合条件\n"
     msg = f"🔹【{title}】\n"
     for token in tokens[:5]:
-        msg += f"🚀 {token['symbol']} | 💰市值: {int(token['market_cap']/1e6)}M\n🔗链接: {token['url']}\n\n"
+        desc = fetch_alva_description(token['alva_key'])
+        msg += f"🚀 {token['symbol']} | 💰市值: {int(token['market_cap']/1e6)}M\n"
+        msg += f"📄 简介：{desc[:80]}...\n"  # 简介太长则截断
+        msg += f"🔗链接: {token['url']}\n\n"
+        time.sleep(1.5)  # 加个延迟，防止访问太频繁被 Alva 封
     return msg
 
 def main():
